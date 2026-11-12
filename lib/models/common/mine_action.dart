@@ -1,8 +1,12 @@
 import 'package:PiliBro/utils/storage.dart';
+import 'package:get/get.dart';
 import 'package:PiliBro/utils/storage_key.dart';
 
 /// 我的页快捷按钮。键同时是设置箱里的显示开关，映射顺序即默认顺序。
 abstract final class MineAction {
+  /// 改完顺序后自增，我的页据此立刻重排，不必重启。
+  static final RxInt revision = 0.obs;
+
   static const labels = <String, String>{
     SettingBoxKey.mineBtnOneKeyListen: '一键听歌',
     SettingBoxKey.mineBtnSpeed: '倍速设置',
@@ -38,9 +42,11 @@ abstract final class MineAction {
   }
 
   /// [order] 是全部按钮的新顺序，[shown] 是要显示的按钮。
-  static Future<void> save(List<String> order, {required Set<String> shown}) =>
-      GStorage.setting.putAll({
-        for (final key in labels.keys) key: shown.contains(key),
-        SettingBoxKey.mineBtnOrder: order,
-      });
+  static Future<void> save(List<String> order, {required Set<String> shown}) async {
+    await GStorage.setting.putAll({
+      for (final key in labels.keys) key: shown.contains(key),
+      SettingBoxKey.mineBtnOrder: order,
+    });
+    revision.value++;
+  }
 }

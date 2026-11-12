@@ -109,7 +109,13 @@ class _MediaPageState extends CommonPageState<MinePage>
                   physics: const AlwaysScrollableScrollPhysics(),
                   children: [
                     _buildUserInfo(theme, secondary),
-                    ..._buildActionRows(secondary),
+                    Obx(() {
+                      MineAction.revision.value;
+                      return Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: _buildActionRows(secondary),
+                      );
+                    }),
                     for (final tab in controller.mineTabs)
                       switch (tab) {
                         .favorite => Obx(_buildFav),
