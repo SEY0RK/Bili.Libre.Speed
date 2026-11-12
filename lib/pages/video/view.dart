@@ -1703,24 +1703,6 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
                   constraints: BoxConstraints(maxWidth: 96.0 * tabs.length),
                   child: tabBar(),
                 ),
-              Expanded(
-                child: Center(
-                  child: SizedBox.square(
-                    dimension: 38,
-                    child: IconButton(
-                      tooltip: '全屏',
-                      onPressed: () => videoDetailController
-                          .plPlayerController
-                          .triggerFullScreen(status: true),
-                      icon: Icon(
-                        Icons.fullscreen,
-                        size: 22,
-                        color: colorScheme.onSurfaceVariant,
-                      ),
-                    ),
-                  ),
-                ),
-              ),
             ],
           ),
         ),
