@@ -1997,6 +1997,13 @@ class PlPlayerController
         updateDuration(duration);
         _updateIOSPip();
       }),
+      // media_kit 不会自己打印 mpv 日志，要应用订阅 stream.log；
+      // 只在诊断包（--dart-define=MPV_VERBOSE=true）里开，正常包不产生噪音。
+      if (_mpvVerbose)
+        stream.log.listen((e) {
+          debugPrint('[mpv/${e.level}] ${e.prefix}: ${e.text}');
+        }),
+
       stream.buffer.listen((Duration buffer) {
         buffered.value = buffer.inSeconds;
       }),
