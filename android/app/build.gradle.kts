@@ -150,7 +150,7 @@ android {
     defaultConfig {
         applicationId = "org.BroTech.gege.pilibro"
         minSdk = flutter.minSdkVersion
-        targetSdk = 37
+        targetSdk = 36
         versionCode = flutter.versionCode
         versionName = flutter.versionName
     }
