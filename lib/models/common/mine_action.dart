@@ -37,9 +37,10 @@ abstract final class MineAction {
     ];
   }
 
-  /// [selected] 的先后即新顺序，选中即显示。
-  static Future<void> save(List<String> selected) => GStorage.setting.putAll({
-    for (final key in labels.keys) key: selected.contains(key),
-    SettingBoxKey.mineBtnOrder: selected,
-  });
+  /// [order] 是全部按钮的新顺序，[shown] 是要显示的按钮。
+  static Future<void> save(List<String> order, {required Set<String> shown}) =>
+      GStorage.setting.putAll({
+        for (final key in labels.keys) key: shown.contains(key),
+        SettingBoxKey.mineBtnOrder: order,
+      });
 }

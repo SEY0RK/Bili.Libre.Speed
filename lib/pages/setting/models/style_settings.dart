@@ -29,6 +29,7 @@ import 'package:PiliBro/pages/mine/controller.dart';
 import 'package:PiliBro/pages/setting/models/model.dart';
 import 'package:PiliBro/pages/setting/slide_color_picker.dart';
 import 'package:PiliBro/pages/setting/widgets/dual_slider_dialog.dart';
+import 'package:PiliBro/pages/setting/widgets/mine_buttons_dialog.dart';
 import 'package:PiliBro/pages/setting/widgets/multi_select_dialog.dart';
 import 'package:PiliBro/pages/setting/widgets/ordered_multi_select_dialog.dart';
 import 'package:PiliBro/pages/setting/widgets/select_dialog.dart';
@@ -987,19 +988,19 @@ Future<void> _showMineButtonsDialog(
   VoidCallback setState,
 ) async {
   final order = MineAction.order;
-  final res = await showDialog<List<String>>(
+  final res = await showDialog<(List<String>, Set<String>)>(
     context: context,
-    builder: (context) => OrderedMultiSelectDialog<String>(
-      title: const Text('我的页快捷按钮'),
-      initValues: order.where(MineAction.shown),
-      values: {
-        for (final key in order) key: MineAction.labels[key]!,
+    builder: (context) => MineButtonsDialog(
+      labels: MineAction.labels,
+      order: order,
+      shown: {
+        for (final key in order)
+          if (MineAction.shown(key)) key,
       },
     ),
   );
   if (res == null) return;
-  // 勾选即显示，返回的先后就是新顺序
-  await MineAction.save(res);
+  await MineAction.save(res.$1, shown: res.$2);
   setState();
 }
 
