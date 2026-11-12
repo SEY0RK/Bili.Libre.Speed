@@ -36,6 +36,20 @@ jobs:
           BUILD_NUMBER_OVERRIDE: "0"
           RELEASE_TAG_OVERRIDE: ""
         run: lib/scripts/build.ps1 android
+      - name: Use fixed signing key
+        shell: bash
+        env:
+          SIGN_KEYSTORE_BASE64: ${{ secrets.FOLD6_KEYSTORE_BASE64 }}
+          SIGN_STORE_PASSWORD: ${{ secrets.FOLD6_KEYSTORE_PASSWORD }}
+        run: |
+          test -n "$SIGN_KEYSTORE_BASE64" || { echo "Missing FOLD6_KEYSTORE_BASE64 secret"; exit 1; }
+          echo "$SIGN_KEYSTORE_BASE64" | base64 -d > android/app/fold6-release.p12
+          {
+            echo storeFile='fold6-release.p12'
+            echo storePassword="$SIGN_STORE_PASSWORD"
+            echo keyAlias='fold6key'
+            echo keyPassword="$SIGN_STORE_PASSWORD"
+          } > android/key.properties
       - name: Build release APK
         run: flutter build apk --release --dart-define-from-file=pili_release.json --no-pub
       - name: Rename
