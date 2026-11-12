@@ -1,6 +1,11 @@
 name: PiliBro Fold6 Release APK
 on:
   workflow_dispatch:
+    inputs:
+      mpv_verbose:
+        description: "把 mpv 日志开到 info（诊断用）"
+        type: boolean
+        default: false
 jobs:
   android-release:
     runs-on: ubuntu-latest
@@ -80,7 +85,7 @@ jobs:
         shell: bash
         run: sha256sum android/app/fold6-release.p12
       - name: Build release APK
-        run: flutter build apk --release --dart-define-from-file=pili_release.json --no-pub
+        run: flutter build apk --release --dart-define-from-file=pili_release.json --dart-define=MPV_VERBOSE=${{ inputs.mpv_verbose }} --no-pub
       - name: Rename
         shell: bash
         run: |

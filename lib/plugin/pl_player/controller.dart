@@ -85,6 +85,8 @@ import 'package:window_manager/window_manager.dart';
 typedef PlayCallback = Future<void>? Function();
 typedef PlayOwner = ({String tag, Type? type});
 
+const bool _mpvVerbose = bool.fromEnvironment('MPV_VERBOSE');
+
 class PlPlayerController
     with BlockConfigMixin, AudioNormalizationMixin, WidgetsBindingObserver {
   Player? _videoPlayerController;
@@ -1662,7 +1664,8 @@ class PlPlayerController
 
     final player = await Player.create(
       configuration: PlayerConfiguration(
-        logLevel: kDebugMode ? .warn : .error,
+        // 诊断包用：--dart-define=MPV_VERBOSE=true 时把 mpv 日志开到 info
+        logLevel: kDebugMode || _mpvVerbose ? .info : .error,
         options: opt,
       ),
     );
