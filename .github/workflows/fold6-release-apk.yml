@@ -1,0 +1,52 @@
+name: PiliBro Fold6 Release APK
+on:
+  workflow_dispatch:
+jobs:
+  android-release:
+    runs-on: ubuntu-latest
+    permissions: write-all
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with: { fetch-depth: 0 }
+      - name: Setup Java
+        uses: actions/setup-java@v6
+        with:
+          distribution: zulu
+          java-version: "17"
+          cache: gradle
+          cache-dependency-path: |
+            android/*.gradle*
+            android/**/gradle-wrapper.properties
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version-file: pubspec.yaml
+          cache: true
+      - name: Apply Patch
+        shell: pwsh
+        run: lib/scripts/patch.ps1 android
+      - name: Apply media_kit Android decoder lab hook
+        shell: pwsh
+        run: lib/scripts/patch_media_kit_android_decoder_lab.ps1
+      - name: Set and Extract version
+        shell: pwsh
+        env:
+          BUILD_NUMBER_OVERRIDE: "0"
+          RELEASE_TAG_OVERRIDE: ""
+        run: lib/scripts/build.ps1 android
+      - name: Build release APK
+        run: flutter build apk --release --dart-define-from-file=pili_release.json --no-pub
+      - name: Rename
+        shell: bash
+        run: |
+          ls -l build/app/outputs/flutter-apk/
+          cp build/app/outputs/flutter-apk/app-release.apk PiliBro_fold6_release.apk
+      - name: Upload artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: PiliBro_fold6_release.apk
+          path: PiliBro_fold6_release.apk
+          if-no-files-found: error
+          archive: false
