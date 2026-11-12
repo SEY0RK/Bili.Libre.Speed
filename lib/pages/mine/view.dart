@@ -155,8 +155,7 @@ class _MediaPageState extends CommonPageState<MinePage>
     ),
   );
 
-  // 顺序在「外观设置 → 我的页快捷按钮」里排，四个一行，
-  // 最后一行用空位补齐，免得剩下的按钮被拉开
+  /// 每个快捷按钮长什么样；摆在哪由 [MineAction.order] 决定。
   Widget _actionOf(String key, Color primary) => switch (key) {
     SettingBoxKey.mineBtnOneKeyListen => oneKeyListenAction(color: primary),
     SettingBoxKey.mineBtnSpeed => _actionButton(
@@ -237,6 +236,8 @@ class _MediaPageState extends CommonPageState<MinePage>
     _ => const SizedBox.shrink(),
   };
 
+  // 顺序在「外观设置 → 我的页快捷按钮」里排，四个一行，
+  // 最后一行用空位补齐，免得剩下的按钮被拉开
   List<Widget> _buildActionRows(Color primary) {
     final buttons = [
       for (final key in MineAction.order)
