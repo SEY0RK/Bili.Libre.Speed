@@ -561,7 +561,23 @@ class PlPlayerController
   NetworkProfile? playbackNetworkProfile;
   int _networkProfileResolutions = 0;
   bool enableHeart = true;
-  late final String? hwdec = Pref.enableHA ? Pref.hardwareDecoding : null;
+  late final String? hwdec = _effectiveHwdec;
+
+  /// 安卓的直通 mediacodec 需要 VO 提供 Surface，部分机型 seek 后
+  /// FFmpeg 会报 "Both surface and native_window are NULL" 并让画面停住
+  /// （声音照常）。这里把列表里的直通项统一换成非直通的 mediacodec-copy，
+  /// 用户即使手动勾了直通也不会再踩到。
+  static String? get _effectiveHwdec {
+    if (!Pref.enableHA) return null;
+    final raw = Pref.hardwareDecoding;
+    if (!Platform.isAndroid) return raw;
+    final parts = raw.split(',');
+    if (!parts.contains('mediacodec')) return raw;
+    return parts
+        .map((e) => e == 'mediacodec' ? 'mediacodec-copy' : e)
+        .toSet()
+        .join(',');
+  }
   // 软解时 vd-lavc-o 对解码器没用，改了却照样重建解码器，所以只在安卓硬解时开
   late final double _operatingRateFromSpeed = Platform.isAndroid && hwdec != null
       ? Pref.operatingRateFromSpeed
