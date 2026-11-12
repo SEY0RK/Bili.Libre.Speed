@@ -36,19 +36,41 @@ jobs:
           BUILD_NUMBER_OVERRIDE: "0"
           RELEASE_TAG_OVERRIDE: ""
         run: lib/scripts/build.ps1 android
-      - name: Use fixed signing key
+      - name: Restore fixed signing key from Actions cache
+        id: signkey
+        uses: actions/cache/restore@v4
+        with:
+          path: android/app/fold6-release.p12
+          key: fold6-signing-key-v1
+      - name: Seed the signing key on a cache miss
+        if: steps.signkey.outputs.cache-hit != 'true'
         shell: bash
         env:
           SIGN_KEYSTORE_BASE64: ${{ secrets.FOLD6_KEYSTORE_BASE64 }}
+        run: |
+          set -euo pipefail
+          test -n "$SIGN_KEYSTORE_BASE64" || { echo "::error::signing cache miss and FOLD6_KEYSTORE_BASE64 is empty"; exit 1; }
+          mkdir -p android/app
+          printf '%s' "$SIGN_KEYSTORE_BASE64" | base64 -d > android/app/fold6-release.p12
+          test -s android/app/fold6-release.p12
+      - name: Save the signing key to Actions cache
+        if: steps.signkey.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: android/app/fold6-release.p12
+          key: fold6-signing-key-v1
+      - name: Write key.properties
+        shell: bash
+        env:
           SIGN_STORE_PASSWORD: ${{ secrets.FOLD6_KEYSTORE_PASSWORD }}
         run: |
-          test -n "$SIGN_KEYSTORE_BASE64" || { echo "Missing FOLD6_KEYSTORE_BASE64 secret"; exit 1; }
-          echo "$SIGN_KEYSTORE_BASE64" | base64 -d > android/app/fold6-release.p12
+          set -euo pipefail
+          test -n "$SIGN_STORE_PASSWORD" || { echo "::error::FOLD6_KEYSTORE_PASSWORD is empty"; exit 1; }
           {
-            echo storeFile='fold6-release.p12'
-            echo storePassword="$SIGN_STORE_PASSWORD"
-            echo keyAlias='fold6key'
-            echo keyPassword="$SIGN_STORE_PASSWORD"
+            echo "storeFile=fold6-release.p12"
+            echo "storePassword=$SIGN_STORE_PASSWORD"
+            echo "keyAlias=fold6key"
+            echo "keyPassword=$SIGN_STORE_PASSWORD"
           } > android/key.properties
       - name: Build release APK
         run: flutter build apk --release --dart-define-from-file=pili_release.json --no-pub
@@ -57,6 +79,17 @@ jobs:
         run: |
           ls -l build/app/outputs/flutter-apk/
           cp build/app/outputs/flutter-apk/app-release.apk PiliBro_fold6_release.apk
+      - name: Verify the fixed signing certificate
+        shell: bash
+        run: |
+          set -euo pipefail
+          APKSIGNER=$(command -v apksigner || true)
+          if [ -z "$APKSIGNER" ]; then
+            APKSIGNER=$(find "${ANDROID_SDK_ROOT:-$ANDROID_HOME}" -path '*build-tools*/apksigner' -type f | sort -V | tail -1)
+          fi
+          "$APKSIGNER" verify --print-certs PiliBro_fold6_release.apk | tee certs.txt
+          grep -qi '97af542399882a8e6fe6c7ca9f80e8a955f32e0a97c2b86e8602b0883a42568e' certs.txt \
+            || { echo "::error::APK is not signed with the fixed fold6 key"; exit 1; }
       - name: Upload artifact
         uses: actions/upload-artifact@v7
         with:
