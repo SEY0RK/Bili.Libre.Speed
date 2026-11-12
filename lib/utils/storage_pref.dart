@@ -692,10 +692,16 @@ abstract final class Pref {
   static String get webviewUaCustom =>
       _setting.get(SettingBoxKey.webviewUaCustom, defaultValue: '');
 
-  static String get hardwareDecoding => _setting.get(
-    SettingBoxKey.hardwareDecoding,
-    defaultValue: HwDecType.kHwdec,
-  );
+  static String get hardwareDecoding {
+    final value = _setting.get(
+      SettingBoxKey.hardwareDecoding,
+      defaultValue: HwDecType.kHwdec,
+    ) as String;
+    // 老版本存下来的直通默认值：迁移到非直通，避免 seek 后丢 Surface
+    return value == HwDecType.legacyAndroidDefault
+        ? HwDecType.kHwdec
+        : value;
+  }
 
   // display-resample 要求屏幕刷新时序稳定；部分安卓机 seek 后拿不到 vsync，
   // 播放时钟会整个停住（画面和进度条一起不动，声音还在），故安卓以音频为准。
