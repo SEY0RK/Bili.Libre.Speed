@@ -18,6 +18,7 @@ import 'package:PiliBro/models/common/dynamic/dynamic_badge_mode.dart';
 import 'package:PiliBro/models/common/dynamic/up_panel_position.dart';
 import 'package:PiliBro/models/common/home_tab_type.dart';
 import 'package:PiliBro/models/common/member/tab_type.dart';
+import 'package:PiliBro/models/common/mine_action.dart';
 import 'package:PiliBro/models/common/mine_tab_type.dart';
 import 'package:PiliBro/models/common/msg/msg_unread_type.dart';
 import 'package:PiliBro/models/common/nav_bar_config.dart';
@@ -183,8 +184,8 @@ List<SettingsModel> get styleSettings => [
     leading: const Icon(Icons.apps_outlined),
     getSubtitle: () {
       final shown = [
-        for (final MapEntry(:key, :value) in _mineButtons.entries)
-          if (GStorage.setting.get(key, defaultValue: true) as bool) value,
+        for (final key in MineAction.order)
+          if (MineAction.shown(key)) MineAction.labels[key]!,
       ];
       return shown.isEmpty ? '当前全部隐藏' : '当前显示：${shown.join('、')}';
     },
@@ -981,39 +982,24 @@ Widget _themeTrailing(ThemeData theme) {
   );
 }
 
-// 我的页上能藏的按钮；倍速设置、网关管理常驻，不在这里
-const _mineButtons = {
-  SettingBoxKey.mineBtnHistory: '观看记录',
-  SettingBoxKey.mineBtnSub: '我的订阅',
-  SettingBoxKey.mineBtnOneKeyListen: '一键听歌',
-  SettingBoxKey.mineBtnLater: '稍后再看',
-  SettingBoxKey.mineBtnAvSettings: '音画设置',
-  SettingBoxKey.mineBtnNetworkPolicy: '智能网优',
-  SettingBoxKey.mineBtnOrientation: '屏幕旋转',
-  SettingBoxKey.mineBtnCreator: '创作中心',
-  SettingBoxKey.mineBtnDownload: '离线缓存',
-  SettingBoxKey.mineBtnAudioSettings: '特色播放',
-  SettingBoxKey.mineBtnPlaybackStats: '播放统计',
-};
-
 Future<void> _showMineButtonsDialog(
   BuildContext context,
   VoidCallback setState,
 ) async {
-  final res = await showDialog<Set<String>>(
+  final order = MineAction.order;
+  final res = await showDialog<List<String>>(
     context: context,
-    builder: (context) => MultiSelectDialog<String>(
-      title: '我的页快捷按钮',
-      initValues: _mineButtons.keys.where(
-        (k) => GStorage.setting.get(k, defaultValue: true) as bool,
-      ),
-      values: _mineButtons,
+    builder: (context) => OrderedMultiSelectDialog<String>(
+      title: const Text('我的页快捷按钮'),
+      initValues: order.where(MineAction.shown),
+      values: {
+        for (final key in order) key: MineAction.labels[key]!,
+      },
     ),
   );
   if (res == null) return;
-  await GStorage.setting.putAll({
-    for (final k in _mineButtons.keys) k: res.contains(k),
-  });
+  // 勾选即显示，返回的先后就是新顺序
+  await MineAction.save(res);
   setState();
 }
 
