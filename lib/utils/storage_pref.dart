@@ -697,8 +697,12 @@ abstract final class Pref {
     defaultValue: HwDecType.kHwdec,
   );
 
-  static String get videoSync =>
-      _setting.get(SettingBoxKey.videoSync, defaultValue: 'display-resample');
+  // display-resample 要求屏幕刷新时序稳定；部分安卓机 seek 后拿不到 vsync，
+  // 播放时钟会整个停住（画面和进度条一起不动，声音还在），故安卓以音频为准。
+  static String get videoSync => _setting.get(
+    SettingBoxKey.videoSync,
+    defaultValue: Platform.isAndroid ? 'audio' : 'display-resample',
+  );
 
   // 与 mpv 自动插入的 scaletempo2 的 max-speed 默认值一致；等于它时不传 af，
   // 完全走 mpv 原生路径。设置时等于 8 会删掉这个键，这里比较的是同一个字面量。
