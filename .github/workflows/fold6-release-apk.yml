@@ -130,4 +130,5 @@ jobs:
           archive: false
       - name: Print artifact url
         shell: bash
-        run: echo "artifact: ${{ steps.upload.outputs.artifact-url }}"
+        run: |
+          echo "artifact: ${{ steps.upload.outputs.artifact-url }}"
