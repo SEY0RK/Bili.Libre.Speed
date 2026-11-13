@@ -38,9 +38,6 @@ jobs:
       - name: Apply Patch
         shell: pwsh
         run: lib/scripts/patch.ps1 android
-      - name: Apply MediaCodec embed vo
-        shell: bash
-        run: python3 lib/scripts/apply_embed_vo.py
       - name: Apply media_kit Android decoder lab hook
         if: ${{ inputs.decoder_lab != false }}
         shell: pwsh
