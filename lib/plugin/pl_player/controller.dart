@@ -1815,6 +1815,23 @@ class PlPlayerController
     _lastHwdecWatched = null;
   }
 
+  /// 单纯 open() 复用旧的 Surface / ImageReader，卡住后救不回来；
+  /// 这里销毁整个 Player + VideoController，重新走一遍创建流程，
+  /// 等价于退出视频页再进来，并从原位置续播。
+  Future<void> hardRebuild() async {
+    final pos = _videoPlayerController?.state.position ?? Duration.zero;
+    _removeListeners();
+    _videoPlayerController?.dispose();
+    _videoPlayerController = null;
+    _videoController = null;
+    await _createVideoController(
+      dataSource,
+      isLive ? null : pos,
+      null,
+      null,
+    );
+  }
+
   Future<void>? refreshPlayer() {
     if (dataSource is FileSource) {
       return null;
@@ -2161,8 +2178,8 @@ class PlPlayerController
       if (ticks - _stallRecoverTick < frequency * 10) return;
       _stallRecoverTick = ticks;
       _lastPositionTick = ticks;
-      SmartDialog.showToast('播放时钟停住，正在重载');
-      refreshPlayer();
+      SmartDialog.showToast('画面停住，正在重建播放器');
+      hardRebuild();
     });
   }
 
