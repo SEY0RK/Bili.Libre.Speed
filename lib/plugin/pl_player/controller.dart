@@ -1720,17 +1720,20 @@ class PlPlayerController
     player.setMediaHeader(userAgent: BrowserUa.pc, referer: HttpString.baseUrl);
 
     if (_mpvVerbose) {
-      debugPrint('[CONF] hwdec=\${hwdec ?? 'no'} videoSync=\${Platform.isAndroid ? 'audio' : Pref.videoSync}');
+      debugPrint(
+        "[CONF] hwdec=${hwdec ?? 'no'} "
+        "videoSync=${Platform.isAndroid ? 'audio' : Pref.videoSync}",
+      );
       _diagTimer?.cancel();
       _diagTimer = Timer.periodic(const Duration(seconds: 1), (_) {
         final p = _videoPlayerController;
         debugPrint(
-          '[STATE] mpvPos=\${p?.state.position.inSeconds} '
-          'playing=\${p?.state.playing} rate=\${p?.state.rate} '
-          'buffer=\${p?.state.buffer.inSeconds} '
-          'appPos=\${position.value} seeking=\${isSeeking.value} '
-          'preview=\${showPreview.value} buffering=\${isBuffering.value} '
-          'status=\$playerStatus',
+          '[STATE] mpvPos=${p?.state.position.inSeconds} '
+          'playing=${p?.state.playing} rate=${p?.state.rate} '
+          'buffer=${p?.state.buffer.inSeconds} '
+          'appPos=${position.value} seeking=${isSeeking.value} '
+          'preview=${showPreview.value} buffering=${isBuffering.value} '
+          'status=$playerStatus',
         );
       });
     }
