@@ -562,32 +562,10 @@ class PlPlayerController
   NetworkProfile? playbackNetworkProfile;
   int _networkProfileResolutions = 0;
   bool enableHeart = true;
-  late final String? hwdec = _effectiveHwdec;
-
-  /// 安卓的直通 mediacodec 需要 VO 提供 Surface，部分机型 seek 后
-  /// FFmpeg 会报 "Both surface and native_window are NULL" 并让画面停住
-  /// （声音照常）。这里把列表里的直通项统一换成非直通的 mediacodec-copy，
-  /// 用户即使手动勾了直通也不会再踩到。
-  static String? get _effectiveHwdec {
-    if (!Pref.enableHA) return null;
-    final raw = Pref.hardwareDecoding;
-    // 安卓的 mediacodec 系列（含 -copy）在解码器重建时需要 VO 提供
-    // Surface。seek 越过缓存触发 HTTP Range 重连时，边界坏包会让 mpv
-    // 重建解码器，此刻 Surface 已失效，FFmpeg 报
-    // "Both surface and native_window are NULL"，画面与播放时钟一起停住。
-    // 软解不依赖 Surface，坏包可被跳过并继续播放，故安卓统一走软解。
-    return Platform.isAndroid ? 'no' : raw;
-  }
-  // 软解时 vd-lavc-o 对解码器没用，改了却照样重建解码器，所以只在安卓硬解时开
-  late final double _operatingRateFromSpeed = Platform.isAndroid && hwdec != null
-      ? Pref.operatingRateFromSpeed
-      : 0;
+  late final String? hwdec = Pref.enableHA ? Pref.hardwareDecoding : null;
+  // vd-lavc-o 每改一次都会让 mpv 重建解码器，PiliPlus 没有这条路径，先关掉。
+  late final double _operatingRateFromSpeed = 0;
   int _operatingRate = 0;
-  // The list is taken literally: mpv tries the entries in order and decodes in
-  // software only where 'no' is listed. Without 'no', a file none of them can
-  // decode fails to play.
-  late final bool _hwdecAllowsSoftware =
-      hwdec == null || hwdec!.split(',').contains('no');
   // 设置页里直通只能单选；平板、电视预设写的是带回退列表的直通，先比较前者
   late final bool mediacodecEmbed =
       hwdec == 'mediacodec_embed' || _embedWithFallback;
@@ -1662,23 +1640,17 @@ class PlPlayerController
 
   Future<Player> _initPlayer() async {
     assert(_videoPlayerController == null);
-    // display-resample 让 mpv 的时钟跟随屏幕 vsync；一旦视频输出漏一帧
-    // （120Hz 可变刷新屏尤其容易），时钟就停住：画面、进度、弹幕全不动，
-    // 音频线程却继续，且 mpv 不报任何错。安卓统一以音频为时钟源。
+    // 与 PiliPlus 保持一致：不额外覆盖 video-sync / autosync / hwdec 回退策略。
     final opt = {
-      'video-sync': Platform.isAndroid ? 'audio' : Pref.videoSync,
+      'video-sync': Pref.videoSync,
       if (Platform.isAndroid) 'ao': Pref.audioOutput,
       'volume':
           (PlatformUtils.isMobile ? Pref.playerVolume : volume.value * 100)
               .toString(),
     };
-    // autosync 允许长时间 A/V 不同步，反而会放大这种停顿，安卓不传。
-    final autosync = Platform.isAndroid ? '0' : Pref.autosync;
+    final autosync = Pref.autosync;
     if (autosync != '0') {
       opt['autosync'] = autosync;
-    }
-    if (!_hwdecAllowsSoftware) {
-      opt['hwdec-software-fallback'] = 'no';
     }
     if (Pref.decoderFramedrop) opt['framedrop'] = 'decoder+vo';
 
@@ -1707,8 +1679,7 @@ class PlPlayerController
             : null,
         enableHardwareAcceleration: hwdec != null,
         androidAttachSurfaceAfterVideoParameters: false,
-        vo: mediacodecEmbed ? 'mediacodec_embed' : null,
-        hwdec: mediacodecEmbed ? 'mediacodec' : hwdec,
+        hwdec: hwdec,
       ),
     );
 
@@ -1720,15 +1691,22 @@ class PlPlayerController
     player.setMediaHeader(userAgent: BrowserUa.pc, referer: HttpString.baseUrl);
 
     if (_mpvVerbose) {
-      debugPrint(
-        "[CONF] hwdec=${hwdec ?? 'no'} "
-        "videoSync=${Platform.isAndroid ? 'audio' : Pref.videoSync}",
-      );
+      debugPrint("[CONF] hwdec=${hwdec ?? 'no'} videoSync=${Pref.videoSync}");
       _diagTimer?.cancel();
       _diagTimer = Timer.periodic(const Duration(seconds: 1), (_) {
         final p = _videoPlayerController;
+        String prop(String key) {
+          try {
+            return p?.getProperty(key) ?? '-';
+          } catch (_) {
+            return 'ERR';
+          }
+        }
         debugPrint(
           '[STATE] mpvPos=${p?.state.position.inSeconds} '
+          'rawPos=${prop('time-pos')} pause=${prop('pause')} '
+          'idle=${prop('core-idle')} voOk=${prop('vo-configured')} '
+          'hwdecNow=${prop('hwdec-current')} '
           'playing=${p?.state.playing} rate=${p?.state.rate} '
           'buffer=${p?.state.buffer.inSeconds} '
           'appPos=${position.value} seeking=${isSeeking.value} '
@@ -2175,10 +2153,6 @@ class PlPlayerController
   }
 
   Future<void> seek(Duration position, {bool isSeek = false}) async {
-    if (isSeek) {
-      /// 拖动进度条调节时，不等待第一帧，防止抖动
-      await _videoPlayerController?.stream.buffer.first;
-    }
     danmakuController?.clear();
     try {
       await _videoPlayerController?.seek(position);

@@ -49,11 +49,8 @@ enum HwDecType {
   /// 普通列表，不带 no，直通期间不退软解，失败才会报出来
   static const embedWithFallback = 'mediacodec_embed,mediacodec,auto-safe';
 
-  // 直通 mediacodec 在部分机型 seek 后会丢 Surface（FFmpeg 报
-  // "Both surface and native_window are NULL"），画面冻住而声音继续，
-  // 故默认走非直通的 mediacodec-copy：解码后拷回内存，不依赖 Surface。
   static final String androidDefault = [
-    mediacodecCopy.hwdec,
+    mediacodec.hwdec,
     autoSafe.hwdec,
     no.hwdec,
   ].join(',');
