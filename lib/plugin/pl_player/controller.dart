@@ -1661,14 +1661,18 @@ class PlPlayerController
 
   Future<Player> _initPlayer() async {
     assert(_videoPlayerController == null);
+    // display-resample 让 mpv 的时钟跟随屏幕 vsync；一旦视频输出漏一帧
+    // （120Hz 可变刷新屏尤其容易），时钟就停住：画面、进度、弹幕全不动，
+    // 音频线程却继续，且 mpv 不报任何错。安卓统一以音频为时钟源。
     final opt = {
-      'video-sync': Pref.videoSync,
+      'video-sync': Platform.isAndroid ? 'audio' : Pref.videoSync,
       if (Platform.isAndroid) 'ao': Pref.audioOutput,
       'volume':
           (PlatformUtils.isMobile ? Pref.playerVolume : volume.value * 100)
               .toString(),
     };
-    final autosync = Pref.autosync;
+    // autosync 允许长时间 A/V 不同步，反而会放大这种停顿，安卓不传。
+    final autosync = Platform.isAndroid ? '0' : Pref.autosync;
     if (autosync != '0') {
       opt['autosync'] = autosync;
     }
