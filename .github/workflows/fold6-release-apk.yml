@@ -1,5 +1,7 @@
 name: PiliBro Fold6 Release APK
 on:
+  push:
+    branches: [canary]
   workflow_dispatch:
     inputs:
       mpv_verbose:
@@ -36,8 +38,11 @@ jobs:
       - name: Apply Patch
         shell: pwsh
         run: lib/scripts/patch.ps1 android
+      - name: Apply MediaCodec embed vo
+        shell: bash
+        run: python3 lib/scripts/apply_embed_vo.py
       - name: Apply media_kit Android decoder lab hook
-        if: ${{ inputs.decoder_lab }}
+        if: ${{ inputs.decoder_lab != false }}
         shell: pwsh
         run: lib/scripts/patch_media_kit_android_decoder_lab.ps1
       - name: Set and Extract version
@@ -90,7 +95,7 @@ jobs:
         shell: bash
         run: sha256sum android/app/fold6-release.p12
       - name: Build release APK
-        run: flutter build apk --release --target-platform android-arm64 --split-per-abi --dart-define-from-file=pili_release.json --dart-define=MPV_VERBOSE=${{ inputs.mpv_verbose }} --no-pub
+        run: flutter build apk --release --target-platform android-arm64 --split-per-abi --dart-define-from-file=pili_release.json --dart-define=MPV_VERBOSE=${{ inputs.mpv_verbose || 'false' }} --no-pub
       - name: Rename and assert single ABI
         shell: bash
         run: |
@@ -116,9 +121,13 @@ jobs:
           grep -qi '97af542399882a8e6fe6c7ca9f80e8a955f32e0a97c2b86e8602b0883a42568e' certs.txt \
             || { echo "::error::APK is not signed with the fixed fold6 key"; exit 1; }
       - name: Upload artifact
+        id: upload
         uses: actions/upload-artifact@v7
         with:
           name: PiliBro_fold6_release_arm64-v8a.apk
           path: PiliBro_fold6_release_arm64-v8a.apk
           if-no-files-found: error
           archive: false
+      - name: Print artifact url
+        shell: bash
+        run: echo "artifact: ${{ steps.upload.outputs.artifact-url }}"
