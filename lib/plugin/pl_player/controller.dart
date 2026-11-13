@@ -177,6 +177,7 @@ class PlPlayerController
   Timer? _timer;
   Timer? _weakWifiBufferTimer;
   StreamSubscription? _subForSeek;
+  Timer? _diagTimer;
   StreamSubscription<NetworkPolicyChange>? _networkPolicySubscription;
   Future<void> Function(NetworkPolicyChange change)? onNetworkPolicyChanged;
   Future<bool> Function()? onCdnFallback;
@@ -1718,6 +1719,22 @@ class PlPlayerController
 
     player.setMediaHeader(userAgent: BrowserUa.pc, referer: HttpString.baseUrl);
 
+    if (_mpvVerbose) {
+      debugPrint('[CONF] hwdec=\${hwdec ?? 'no'} videoSync=\${Platform.isAndroid ? 'audio' : Pref.videoSync}');
+      _diagTimer?.cancel();
+      _diagTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+        final p = _videoPlayerController;
+        debugPrint(
+          '[STATE] mpvPos=\${p?.state.position.inSeconds} '
+          'playing=\${p?.state.playing} rate=\${p?.state.rate} '
+          'buffer=\${p?.state.buffer.inSeconds} '
+          'appPos=\${position.value} seeking=\${isSeeking.value} '
+          'preview=\${showPreview.value} buffering=\${isBuffering.value} '
+          'status=\$playerStatus',
+        );
+      });
+    }
+
     _startListeners(player);
 
     return player;
@@ -2140,6 +2157,8 @@ class PlPlayerController
 
   /// 移除事件监听
   void _removeListeners() {
+    _diagTimer?.cancel();
+    _diagTimer = null;
     _subscriptions?.forEach((e) => e.cancel());
     _subscriptions?.clear();
     _subscriptions = null;
