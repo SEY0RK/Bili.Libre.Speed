@@ -1019,9 +1019,12 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
     },
   );
 
-  Widget childSplit(double ratio) {
+  Widget childSplit(double ratio, {bool even = false}) {
     final double videoHeight = maxHeight - padding.vertical;
-    final double width = videoHeight * ratio;
+    // even: 左右严格 1:1，左栏按 contain 居中、允许黑边；否则按视频宽高比
+    // 铺满左栏（无黑边），右栏拿剩余宽度。
+    final double width =
+        even ? (maxWidth - padding.horizontal) / 2 : videoHeight * ratio;
     final videoWidth = isFullScreen ? maxWidth : width;
     final introWidth = maxWidth - width - padding.horizontal;
     return Row(
@@ -1257,14 +1260,20 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
 
   Widget childWhenDisabledAlmostSquareInner(bool isFullScreen) {
     final size = MediaQuery.sizeOf(context);
+    // 竖拿时若仍按「高度 × 视频宽高比」铺满左栏，竖屏视频会把右栏压到
+    // 200~300dp，工具栏和评论控件互相挤；内屏改走 1:1，左栏允许黑边。
     final bool unfoldedLarge = size.shortestSide >= 600 &&
-        maxWidth - (maxHeight - padding.vertical) * 0.5625 - padding.horizontal >= 200;
+        (maxWidth - padding.horizontal) / 2 >= 320;
     if (enableVerticalExpand) {
       return Obx(
         () {
-          if (videoDetailController.isVertical.value &&
-              (!isPortrait || unfoldedLarge)) {
-            return childSplit(0.5625);
+          if (videoDetailController.isVertical.value) {
+            if (!isPortrait) {
+              return childSplit(0.5625);
+            }
+            if (unfoldedLarge) {
+              return childSplit(0.5625, even: true);
+            }
           }
 
           return _childWhenDisabledAlmostSquareInner(isFullScreen);
@@ -1634,7 +1643,7 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
       return TabBar(
         padding: .zero,
         dividerHeight: 0,
-        labelPadding: .zero,
+        labelPadding: const EdgeInsets.only(right: 10),
         dividerColor: Colors.transparent,
         controller: videoDetailController.tabCtr,
         indicator: flag ? const BoxDecoration() : null,
@@ -1672,7 +1681,7 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
                 child: Text(
                   '评论${count == -1 ? '' : ' ${NumUtils.numFormat(count)}'}',
                   softWrap: false,
-                  overflow: .visible,
+                  overflow: TextOverflow.ellipsis,
                 ),
               );
             });
@@ -1680,7 +1689,7 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
             final label = Text(
               text,
               softWrap: false,
-              overflow: .visible,
+              overflow: TextOverflow.ellipsis,
             );
             final relatedNode = _relatedExitFocusNode;
             return Tab(
@@ -1699,9 +1708,11 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
           child: Row(
             children: [
               if (tabs.isNotEmpty)
-                ConstrainedBox(
-                  constraints: BoxConstraints(maxWidth: 96.0 * tabs.length),
-                  child: tabBar(),
+                Flexible(
+                  child: ConstrainedBox(
+                    constraints: BoxConstraints(maxWidth: 96.0 * tabs.length),
+                    child: tabBar(),
+                  ),
                 ),
             ],
           ),
@@ -1710,11 +1721,19 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
           height: 32,
           child: TextButton(
             style: const ButtonStyle(
-              padding: WidgetStatePropertyAll(.zero),
+              padding: WidgetStatePropertyAll(
+                EdgeInsets.symmetric(horizontal: 6),
+              ),
+              minimumSize: WidgetStatePropertyAll(Size(0, 32)),
+              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              visualDensity: VisualDensity.compact,
             ),
             onPressed: videoDetailController.showShootDanmakuSheet,
             child: Text(
               '发弹幕',
+              maxLines: 1,
+              softWrap: false,
+              overflow: TextOverflow.ellipsis,
               style: TextStyle(
                 fontSize: 12,
                 color: colorScheme.onSurfaceVariant,
@@ -1723,7 +1742,7 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
           ),
         ),
         SizedBox.square(
-          dimension: 38,
+          dimension: 36,
           child: Obx(
             () {
               final ctr = videoDetailController.plPlayerController;
@@ -1758,7 +1777,7 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
             },
           ),
         ),
-        const SizedBox(width: 14),
+        const SizedBox(width: 8),
       ],
     );
     final controller = videoDetailController.plPlayerController;
