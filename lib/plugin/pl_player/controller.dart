@@ -1962,52 +1962,49 @@ class PlPlayerController
 
       /// position
       stream.position.listen((Duration position) {
+        final posInSeconds = position.inSeconds;
         final ticks = _positionClock.elapsedTicks;
+
+        // 与 PiliPlus 一致：每个 position 事件都推进 UI 位置并通知全部监听器。
+        // 原来把它们锁在「跨秒」判断里，seek 之后事件可能停在同一秒内，
+        // 进度条、弹幕、纹理刷新会一起停住。
+        if (!isSeeking.value) {
+          this.position.value = posInSeconds;
+        }
+        for (final element in _positionListeners) {
+          element(position);
+        }
+
+        // PiliBro 独有：原始位置回调、统计采样、心跳、解码器监控，仍按秒节流
+        _rawPositionListener?.call(position);
         if (ticks >= _nextStatsSampleTick) {
           _nextStatsSampleTick = ticks + _statsSampleTicks;
           PlaybackStatsService.samplePosition(position);
         }
-
-        _rawPositionListener?.call(position);
-
-        final positionUs = position.inMicroseconds;
-        final lastSecond = _lastPositionEventSecond;
-        final secondStartUs = lastSecond * Duration.microsecondsPerSecond;
-        if (lastSecond < 0 ||
-            positionUs < secondStartUs ||
-            positionUs >= secondStartUs + Duration.microsecondsPerSecond) {
-          final posInSeconds = positionUs ~/ Duration.microsecondsPerSecond;
-          _lastPositionEventSecond = posInSeconds;
-          if (_hwdecWatchWords.isNotEmpty && ticks >= _nextHwdecWatchTick) {
-            _nextHwdecWatchTick = ticks + _hwdecWatchTicks;
-            final current = player.getProperty('hwdec-current');
-            if (current != _lastHwdecWatched) {
-              _lastHwdecWatched = current;
-              if (current.isNotEmpty &&
-                  _hwdecWatchWords.any(
-                        (w) => w.startsWith('-')
-                            ? current.endsWith(w)
-                            : current == w,
-                      ) !=
-                      _hwdecWatchWhitelist) {
-                SmartDialog.showToast(
-                  '当前解码 $current，${_hwdecWatchWhitelist ? '不在白名单' : '命中黑名单'}（硬解列表 $hwdec）',
-                );
-              }
+        if (posInSeconds == _lastPositionEventSecond) return;
+        _lastPositionEventSecond = posInSeconds;
+        if (_hwdecWatchWords.isNotEmpty && ticks >= _nextHwdecWatchTick) {
+          _nextHwdecWatchTick = ticks + _hwdecWatchTicks;
+          final current = player.getProperty('hwdec-current');
+          if (current != _lastHwdecWatched) {
+            _lastHwdecWatched = current;
+            if (current.isNotEmpty &&
+                _hwdecWatchWords.any(
+                      (w) => w.startsWith('-')
+                          ? current.endsWith(w)
+                          : current == w,
+                    ) !=
+                    _hwdecWatchWhitelist) {
+              SmartDialog.showToast(
+                '当前解码 $current，${_hwdecWatchWhitelist ? '不在白名单' : '命中黑名单'}（硬解列表 $hwdec）',
+              );
             }
           }
-          if (posInSeconds == 0 && playerStatus.isPlaying) {
-            _updatePlaybackState(position: position);
-          }
-          if (!isSeeking.value) {
-            this.position.value = posInSeconds;
-          }
-
-          makeHeartBeat(posInSeconds);
-          for (final element in _positionListeners) {
-            element(position);
-          }
         }
+        if (posInSeconds == 0 && playerStatus.isPlaying) {
+          _updatePlaybackState(position: position);
+        }
+        makeHeartBeat(posInSeconds);
       }),
       stream.duration.listen((Duration duration) {
         if (_operatingRateFromSpeed > 0 && !isLive) {
@@ -2146,9 +2143,6 @@ class PlPlayerController
 
   /// 移除事件监听
   void _removeListeners() {
-    _seekReopenTimer?.cancel();
-    _seekReopenTimer = null;
-    _pendingReopen = null;
     _diagTimer?.cancel();
     _diagTimer = null;
     _subscriptions?.forEach((e) => e.cancel());
@@ -2163,57 +2157,23 @@ class PlPlayerController
     }
   }
 
-  /// 安卓上 mpv 的 seek 会让播放循环整个停摆：time-pos 与 audio-pts 一起
-  /// 冻结在 seek 点、demuxer 仍在下载、界面有响应、mpv 不报错。换解码器、
-  /// video-sync、hr-seek、framedrop 都无效。改为从目标位置重新 open 媒体，
-  /// 等价于「退出视频页再进」，从根上不再走 seek 路径。
-  Timer? _seekReopenTimer;
-  Duration? _pendingReopen;
-
+  /// 与 PiliPlus 一致：一次跳转就是一条 mpv seek 命令，等它完成才返回。
   Future<void> seek(Duration position, {bool isSeek = false}) async {
     danmakuController?.clear();
-    final ctr = _videoPlayerController;
-    if (Platform.isAndroid &&
-        !isLive &&
-        dataSource is! FileSource &&
-        ctr != null &&
-        ctr.current.isNotEmpty) {
-      _pendingReopen = position;
-      _seekReopenTimer?.cancel();
-      _seekReopenTimer = Timer(const Duration(milliseconds: 200), () {
-        final target = _pendingReopen;
-        _pendingReopen = null;
-        if (target != null) unawaited(_reopenAt(target));
-      });
-      return;
+    if (_mpvVerbose) {
+      debugPrint('[SEEK] ${position.inMilliseconds}ms');
     }
     try {
-      await ctr?.seek(position);
+      await _videoPlayerController?.seek(position);
       _updateIOSPip(position);
     } catch (e) {
       if (kDebugMode) debugPrint('seek failed: $e');
     }
   }
 
-  Future<void> _reopenAt(Duration position) async {
-    final ctr = _videoPlayerController;
-    if (ctr == null || ctr.current.isEmpty) return;
-    try {
-      final rate = ctr.state.rate;
-      final playing = ctr.state.playing;
-      if (_mpvVerbose) {
-        debugPrint('[REOPEN] start=${position.inMilliseconds}ms rate=$rate');
-      }
-      await ctr.open(
-        ctr.current.last.copyWith(start: position),
-        play: playing,
-      );
-      if (rate != ctr.state.rate) await ctr.setRate(rate);
-      _updateIOSPip(position);
-    } catch (e) {
-      if (kDebugMode) debugPrint('reopen failed: $e');
-    }
-  }
+  /// 把并发的跳转请求排成一条链，避免一次拖动里同时往同一个 mpv 实例
+  /// 塞多条 seek / rate / property 命令（PiliPlus 是 await 到底的原子跳转）。
+  Future<void> _seekTail = Future.value();
 
   /// 跳转至指定位置
   Future<void> seekTo(
@@ -2234,16 +2194,22 @@ class PlPlayerController
     );
     _heartDuration = position.inSeconds;
 
+    final next = _seekTail.then((_) => _runSeek(position));
+    _seekTail = next;
+    await next;
+  }
+
+  Future<void> _runSeek(Duration position) async {
     if (duration.value != 0) {
-      seek(position, isSeek: isSeek);
-    } else {
-      // if (kDebugMode) debugPrint('seek duration else');
-      _subForSeek?.cancel();
-      _subForSeek = duration.listen((_) {
-        seek(position, isSeek: isSeek);
-        _cancelSubForSeek();
-      });
+      await seek(position);
+      return;
     }
+    // 时长未知时，等一次 duration 再跳（PiliBro 原有的回退逻辑）
+    _subForSeek?.cancel();
+    _subForSeek = duration.listen((_) {
+      seek(position);
+      _cancelSubForSeek();
+    });
   }
 
   // vd-lavc-o 是全局选项，会带到下一个视频；换视频后读到真实帧率时再算一次。
