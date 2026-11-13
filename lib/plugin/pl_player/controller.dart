@@ -1657,6 +1657,14 @@ class PlPlayerController
       opt['autosync'] = autosync;
     }
     if (Pref.decoderFramedrop) opt['framedrop'] = 'decoder+vo';
+    if (Platform.isAndroid) {
+      // 精确跳转(hr-seek)会在 seek 点后解码并丢弃到目标帧；部分 CDN 分片
+      // 边界拿不到可用关键帧时，mpv 会一直等首帧：time-pos 停在帧边界、
+      // core-idle=no、音频照常、无任何报错。改成关键帧跳转并允许 VO 丢帧。
+      opt['hr-seek'] = 'no';
+      opt['hr-seek-framedrop'] = 'no';
+      opt.putIfAbsent('framedrop', () => 'vo');
+    }
 
     final player = await Player.create(
       configuration: PlayerConfiguration(
@@ -1713,6 +1721,7 @@ class PlPlayerController
           '[STATE] mpvPos=${p?.state.position.inSeconds} '
           'rawPos=${prop('time-pos')} pause=${prop('pause')} '
           'idle=${prop('core-idle')} voOk=${prop('vo-configured')} '
+          'aoPts=${prop('audio-pts')} voDelay=${prop('vo-delayed-frame-count')} '
           'hwdecNow=${prop('hwdec-current')} '
           'playing=${p?.state.playing} rate=${p?.state.rate} '
           'buffer=${p?.state.buffer.inSeconds} '
