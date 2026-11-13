@@ -1657,14 +1657,6 @@ class PlPlayerController
       opt['autosync'] = autosync;
     }
     if (Pref.decoderFramedrop) opt['framedrop'] = 'decoder+vo';
-    if (Platform.isAndroid) {
-      // 精确跳转(hr-seek)会在 seek 点后解码并丢弃到目标帧；部分 CDN 分片
-      // 边界拿不到可用关键帧时，mpv 会一直等首帧：time-pos 停在帧边界、
-      // core-idle=no、音频照常、无任何报错。改成关键帧跳转并允许 VO 丢帧。
-      opt['hr-seek'] = 'no';
-      opt['hr-seek-framedrop'] = 'no';
-      opt.putIfAbsent('framedrop', () => 'vo');
-    }
 
     final player = await Player.create(
       configuration: PlayerConfiguration(
@@ -2154,6 +2146,9 @@ class PlPlayerController
 
   /// 移除事件监听
   void _removeListeners() {
+    _seekReopenTimer?.cancel();
+    _seekReopenTimer = null;
+    _pendingReopen = null;
     _diagTimer?.cancel();
     _diagTimer = null;
     _subscriptions?.forEach((e) => e.cancel());
@@ -2168,13 +2163,55 @@ class PlPlayerController
     }
   }
 
+  /// 安卓上 mpv 的 seek 会让播放循环整个停摆：time-pos 与 audio-pts 一起
+  /// 冻结在 seek 点、demuxer 仍在下载、界面有响应、mpv 不报错。换解码器、
+  /// video-sync、hr-seek、framedrop 都无效。改为从目标位置重新 open 媒体，
+  /// 等价于「退出视频页再进」，从根上不再走 seek 路径。
+  Timer? _seekReopenTimer;
+  Duration? _pendingReopen;
+
   Future<void> seek(Duration position, {bool isSeek = false}) async {
     danmakuController?.clear();
+    final ctr = _videoPlayerController;
+    if (Platform.isAndroid &&
+        !isLive &&
+        dataSource is! FileSource &&
+        ctr != null &&
+        ctr.current.isNotEmpty) {
+      _pendingReopen = position;
+      _seekReopenTimer?.cancel();
+      _seekReopenTimer = Timer(const Duration(milliseconds: 200), () {
+        final target = _pendingReopen;
+        _pendingReopen = null;
+        if (target != null) unawaited(_reopenAt(target));
+      });
+      return;
+    }
     try {
-      await _videoPlayerController?.seek(position);
+      await ctr?.seek(position);
       _updateIOSPip(position);
     } catch (e) {
       if (kDebugMode) debugPrint('seek failed: $e');
+    }
+  }
+
+  Future<void> _reopenAt(Duration position) async {
+    final ctr = _videoPlayerController;
+    if (ctr == null || ctr.current.isEmpty) return;
+    try {
+      final rate = ctr.state.rate;
+      final playing = ctr.state.playing;
+      if (_mpvVerbose) {
+        debugPrint('[REOPEN] start=${position.inMilliseconds}ms rate=$rate');
+      }
+      await ctr.open(
+        ctr.current.last.copyWith(start: position),
+        play: playing,
+      );
+      if (rate != ctr.state.rate) await ctr.setRate(rate);
+      _updateIOSPip(position);
+    } catch (e) {
+      if (kDebugMode) debugPrint('reopen failed: $e');
     }
   }
 
