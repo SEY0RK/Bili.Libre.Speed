@@ -1019,12 +1019,16 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
     },
   );
 
-  Widget childSplit(double ratio, {bool even = false}) {
+  Widget childSplit(double ratio, {bool balanced = false}) {
     final double videoHeight = maxHeight - padding.vertical;
-    // even: 左右严格 1:1，左栏按 contain 居中、允许黑边；否则按视频宽高比
-    // 铺满左栏（无黑边），右栏拿剩余宽度。
-    final double width =
-        even ? (maxWidth - padding.horizontal) / 2 : videoHeight * ratio;
+    final double contentWidth = maxWidth - padding.horizontal;
+    // balanced: 左栏在「一半」与「55%」之间取按视频宽高比算出的宽度。视频尽量
+    // 大，但右栏至少保留 45%，避免工具栏与评论控件被挤压。若按比例算出的宽度
+    // 小于一半（宽屏上的横屏视频），仍按一半铺开，由 contain 居中留边。
+    // 非 balanced: 按视频宽高比铺满左栏（无黑边），右栏拿剩余宽度。
+    final double width = balanced
+        ? min(max(videoHeight * ratio, contentWidth / 2), contentWidth * 0.55)
+        : videoHeight * ratio;
     final videoWidth = isFullScreen ? maxWidth : width;
     final introWidth = maxWidth - width - padding.horizontal;
     return Row(
@@ -1260,8 +1264,8 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
 
   Widget childWhenDisabledAlmostSquareInner(bool isFullScreen) {
     final size = MediaQuery.sizeOf(context);
-    // 竖拿时若仍按「高度 × 视频宽高比」铺满左栏，竖屏视频会把右栏压到
-    // 200~300dp，工具栏和评论控件互相挤；内屏改走 1:1，左栏允许黑边。
+    // 竖拿时若仍按「高度 × 视频宽高比」铺满左栏，竖屏视频会把右栏压得过窄，
+    // 工具栏和评论控件互相挤；内屏改为「一半 ~ 55%」的均衡分栏，左栏留少量黑边。
     final bool unfoldedLarge = size.shortestSide >= 600 &&
         (maxWidth - padding.horizontal) / 2 >= 320;
     if (enableVerticalExpand) {
@@ -1272,7 +1276,7 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
               return childSplit(0.5625);
             }
             if (unfoldedLarge) {
-              return childSplit(0.5625, even: true);
+              return childSplit(0.5625, balanced: true);
             }
           }
 
