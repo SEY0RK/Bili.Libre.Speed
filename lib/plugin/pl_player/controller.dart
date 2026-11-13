@@ -570,13 +570,12 @@ class PlPlayerController
   static String? get _effectiveHwdec {
     if (!Pref.enableHA) return null;
     final raw = Pref.hardwareDecoding;
-    if (!Platform.isAndroid) return raw;
-    final parts = raw.split(',');
-    if (!parts.contains('mediacodec')) return raw;
-    return parts
-        .map((e) => e == 'mediacodec' ? 'mediacodec-copy' : e)
-        .toSet()
-        .join(',');
+    // 安卓的 mediacodec 系列（含 -copy）在解码器重建时需要 VO 提供
+    // Surface。seek 越过缓存触发 HTTP Range 重连时，边界坏包会让 mpv
+    // 重建解码器，此刻 Surface 已失效，FFmpeg 报
+    // "Both surface and native_window are NULL"，画面与播放时钟一起停住。
+    // 软解不依赖 Surface，坏包可被跳过并继续播放，故安卓统一走软解。
+    return Platform.isAndroid ? 'no' : raw;
   }
   // 软解时 vd-lavc-o 对解码器没用，改了却照样重建解码器，所以只在安卓硬解时开
   late final double _operatingRateFromSpeed = Platform.isAndroid && hwdec != null
@@ -1815,23 +1814,6 @@ class PlPlayerController
     _lastHwdecWatched = null;
   }
 
-  /// 单纯 open() 复用旧的 Surface / ImageReader，卡住后救不回来；
-  /// 这里销毁整个 Player + VideoController，重新走一遍创建流程，
-  /// 等价于退出视频页再进来，并从原位置续播。
-  Future<void> hardRebuild() async {
-    final pos = _videoPlayerController?.state.position ?? Duration.zero;
-    _removeListeners();
-    _videoPlayerController?.dispose();
-    _videoPlayerController = null;
-    _videoController = null;
-    await _createVideoController(
-      dataSource,
-      isLive ? null : pos,
-      null,
-      null,
-    );
-  }
-
   Future<void>? refreshPlayer() {
     if (dataSource is FileSource) {
       return null;
@@ -1870,11 +1852,6 @@ class PlPlayerController
 
   Timer? _wakeLockTimer;
 
-  /// mpv 有时会在 seek、切倍速后停住播放时钟：画面和进度条一起不动，
-  /// 但界面和声音还在。位置三秒不动就重开一次播放器，代价是闪一下。
-  Timer? _stallWatchdog;
-  int _lastPositionTick = 0;
-  int _stallRecoverTick = 0;
 
   void _startWakeLockTimer() {
     _wakeLockTimer?.cancel();
@@ -1976,7 +1953,6 @@ class PlPlayerController
       /// position
       stream.position.listen((Duration position) {
         final ticks = _positionClock.elapsedTicks;
-        _lastPositionTick = ticks;
         if (ticks >= _nextStatsSampleTick) {
           _nextStatsSampleTick = ticks + _statsSampleTicks;
           PlaybackStatsService.samplePosition(position);
@@ -2156,37 +2132,10 @@ class PlPlayerController
         }
       }),
     ];
-    _startStallWatchdog();
-  }
-
-  void _startStallWatchdog() {
-    _stallWatchdog?.cancel();
-    _lastPositionTick = _positionClock.elapsedTicks;
-    _stallRecoverTick = _lastPositionTick;
-    _stallWatchdog = Timer.periodic(const Duration(seconds: 1), (_) {
-      final frequency = _positionClock.frequency;
-      final ticks = _positionClock.elapsedTicks;
-      // 暂停、拖动中、缓冲中本来就不走位置，重置基线别误判
-      if (isLive ||
-          !playerStatus.isPlaying ||
-          isSeeking.value ||
-          isBuffering.value) {
-        _lastPositionTick = ticks;
-        return;
-      }
-      if (ticks - _lastPositionTick < frequency * 3) return;
-      if (ticks - _stallRecoverTick < frequency * 10) return;
-      _stallRecoverTick = ticks;
-      _lastPositionTick = ticks;
-      SmartDialog.showToast('画面停住，正在重建播放器');
-      hardRebuild();
-    });
   }
 
   /// 移除事件监听
   void _removeListeners() {
-    _stallWatchdog?.cancel();
-    _stallWatchdog = null;
     _subscriptions?.forEach((e) => e.cancel());
     _subscriptions?.clear();
     _subscriptions = null;
