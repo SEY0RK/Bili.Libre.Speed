@@ -562,7 +562,10 @@ class PlPlayerController
   NetworkProfile? playbackNetworkProfile;
   int _networkProfileResolutions = 0;
   bool enableHeart = true;
-  late final String? hwdec = Pref.enableHA ? Pref.hardwareDecoding : null;
+  // 诊断包强制使用 PiliPlus 默认硬解列表，排除历史设置被改过的干扰
+  late final String? hwdec = (_mpvVerbose && Platform.isAndroid)
+      ? 'mediacodec,auto-safe,no'
+      : (Pref.enableHA ? Pref.hardwareDecoding : null);
   // vd-lavc-o 每改一次都会让 mpv 重建解码器，PiliPlus 没有这条路径，先关掉。
   late final double _operatingRateFromSpeed = 0;
   int _operatingRate = 0;
@@ -1640,15 +1643,16 @@ class PlPlayerController
 
   Future<Player> _initPlayer() async {
     assert(_videoPlayerController == null);
-    // 与 PiliPlus 保持一致：不额外覆盖 video-sync / autosync / hwdec 回退策略。
+    // 诊断包强制使用 PiliPlus 的默认播放参数，排除历史设置干扰。
+    final bool baseline = _mpvVerbose && Platform.isAndroid;
     final opt = {
-      'video-sync': Pref.videoSync,
+      'video-sync': baseline ? 'display-resample' : Pref.videoSync,
       if (Platform.isAndroid) 'ao': Pref.audioOutput,
       'volume':
           (PlatformUtils.isMobile ? Pref.playerVolume : volume.value * 100)
               .toString(),
     };
-    final autosync = Pref.autosync;
+    final autosync = baseline ? '30' : Pref.autosync;
     if (autosync != '0') {
       opt['autosync'] = autosync;
     }
@@ -1691,7 +1695,10 @@ class PlPlayerController
     player.setMediaHeader(userAgent: BrowserUa.pc, referer: HttpString.baseUrl);
 
     if (_mpvVerbose) {
-      debugPrint("[CONF] hwdec=${hwdec ?? 'no'} videoSync=${Pref.videoSync}");
+      debugPrint(
+        "[CONF] baseline=$baseline hwdec=${hwdec ?? 'no'} "
+        "videoSync=${opt['video-sync']} autosync=${opt['autosync'] ?? '0'}",
+      );
       _diagTimer?.cancel();
       _diagTimer = Timer.periodic(const Duration(seconds: 1), (_) {
         final p = _videoPlayerController;
