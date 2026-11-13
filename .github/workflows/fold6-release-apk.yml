@@ -90,12 +90,20 @@ jobs:
         shell: bash
         run: sha256sum android/app/fold6-release.p12
       - name: Build release APK
-        run: flutter build apk --release --dart-define-from-file=pili_release.json --dart-define=MPV_VERBOSE=${{ inputs.mpv_verbose }} --no-pub
-      - name: Rename
+        run: flutter build apk --release --target-platform android-arm64 --split-per-abi --dart-define-from-file=pili_release.json --dart-define=MPV_VERBOSE=${{ inputs.mpv_verbose }} --no-pub
+      - name: Rename and assert single ABI
         shell: bash
         run: |
+          set -euo pipefail
           ls -l build/app/outputs/flutter-apk/
-          cp build/app/outputs/flutter-apk/app-release.apk PiliBro_fold6_release.apk
+          APK=build/app/outputs/flutter-apk/app-arm64-v8a-release.apk
+          test -f "$APK" || { echo "::error::arm64-v8a APK was not produced"; exit 1; }
+          OUT=PiliBro_fold6_release_arm64-v8a.apk
+          cp "$APK" "$OUT"
+          ABIS=$(unzip -Z1 "$OUT" | sed -n 's|^lib/\([^/]*\)/.*|\1|p' | sort -u)
+          echo "ABIs in APK: $ABIS"
+          test "$ABIS" = "arm64-v8a" || { echo "::error::APK is not single-ABI arm64-v8a: $ABIS"; exit 1; }
+          ls -l "$OUT" 
       - name: Verify the fixed signing certificate
         shell: bash
         run: |
@@ -104,13 +112,13 @@ jobs:
           if [ -z "$APKSIGNER" ]; then
             APKSIGNER=$(find "${ANDROID_SDK_ROOT:-$ANDROID_HOME}" -path '*build-tools*/apksigner' -type f | sort -V | tail -1)
           fi
-          "$APKSIGNER" verify --print-certs PiliBro_fold6_release.apk | tee certs.txt
+          "$APKSIGNER" verify --print-certs PiliBro_fold6_release_arm64-v8a.apk | tee certs.txt
           grep -qi '97af542399882a8e6fe6c7ca9f80e8a955f32e0a97c2b86e8602b0883a42568e' certs.txt \
             || { echo "::error::APK is not signed with the fixed fold6 key"; exit 1; }
       - name: Upload artifact
         uses: actions/upload-artifact@v7
         with:
-          name: PiliBro_fold6_release.apk
-          path: PiliBro_fold6_release.apk
+          name: PiliBro_fold6_release_arm64-v8a.apk
+          path: PiliBro_fold6_release_arm64-v8a.apk
           if-no-files-found: error
           archive: false
