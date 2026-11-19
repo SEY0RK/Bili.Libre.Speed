@@ -22,7 +22,6 @@ import 'package:PiliBro/grpc/reply.dart';
 import 'package:PiliBro/http/loading_state.dart';
 import 'package:PiliBro/http/reply.dart';
 import 'package:PiliBro/http/video.dart';
-import 'package:PiliBro/pages/article/view.dart';
 import 'package:PiliBro/pages/dynamics/widgets/vote.dart';
 import 'package:PiliBro/pages/member/widget/medal_widget.dart';
 import 'package:PiliBro/pages/save_panel/view.dart';
@@ -1069,7 +1068,10 @@ class ReplyItemGrpc extends StatelessWidget {
                   String? cvid =
                       match?.group(1) ?? match?.group(2) ?? match?.group(3);
                   if (cvid != null) {
-                    ArticlePage.toArticlePage(id: cvid, type: .read);
+                    Get.toNamed(
+                      '/articlePage',
+                      parameters: {'id': cvid, 'type': 'read'},
+                    );
                     return;
                   }
                   PageUtils.handleWebview(matchStr);
@@ -1248,9 +1250,12 @@ class ReplyItemGrpc extends StatelessWidget {
         recognizer = NoDeadlineTapGestureRecognizer()
           ..onTap = () => hasClickUrl
               ? PiliScheme.routePushFromUrl(content.richText.note.clickUrl)
-              : ArticlePage.toArticlePage(
-                  id: content.richText.opus.opusId.toString(),
-                  type: .opus,
+              : Get.toNamed(
+                  '/articlePage',
+                  parameters: {
+                    'id': content.richText.opus.opusId.toString(),
+                    'type': 'opus',
+                  },
                 );
       } else {
         color = colorScheme.secondary;

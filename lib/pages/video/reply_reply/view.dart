@@ -237,7 +237,7 @@ class _VideoReplyReplyPanelState extends State<VideoReplyReplyPanel>
             needDivider: false,
             onReply: (replyItem) => controller.onReply(replyItem, index: -1),
             upMid: widget.upMid ?? controller.upMid,
-            onCheckReply: (item) =>
+            onCheckReply: (item, _) =>
                   controller.onCheckReply(item, isManual: true),
           ),
         ),
@@ -352,7 +352,7 @@ class _VideoReplyReplyPanelState extends State<VideoReplyReplyPanel>
                 replyItem: node.reply,
                 replyLevel: 2,
                 upMid: controller.upMid,
-                onCheckReply: (item) =>
+                onCheckReply: (item, _) =>
                   controller.onCheckReply(item, isManual: true),
                 needDivider: false,
                 depth: node.depth,
@@ -410,7 +410,7 @@ class _VideoReplyReplyPanelState extends State<VideoReplyReplyPanel>
           ? _onJumpToParent
           : (replyItem) => _showDialogue(context, replyItem),
       getReplyChain: () => controller.getParentChain(index, firstFloor),
-      onCheckReply: (item) =>
+      onCheckReply: (item, _) =>
                   controller.onCheckReply(item, isManual: true),
     );
   }
