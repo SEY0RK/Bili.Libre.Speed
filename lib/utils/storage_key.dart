@@ -210,6 +210,7 @@ abstract final class SettingBoxKey {
       horizontalSeasonPanel = 'horizontalSeasonPanel',
       horizontalMemberPage = 'horizontalMemberPage',
       replyLengthLimit = 'replyLengthLimit',
+      foldDepth = 'foldDepth',
       showArgueMsg = 'showArgueMsg',
       reverseFromFirst = 'reverseFromFirst',
       badCertificateCallback = 'badCertificateCallback',

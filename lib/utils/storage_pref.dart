@@ -944,6 +944,9 @@ abstract final class Pref {
     return length;
   }
 
+  static int get foldDepth =>
+      _setting.get(SettingBoxKey.foldDepth, defaultValue: 0);
+
   static int get defaultPicQa =>
       _setting.get(SettingBoxKey.defaultPicQa, defaultValue: 10);
 
