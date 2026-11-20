@@ -11,18 +11,17 @@ import 'package:PiliBro/utils/storage_pref.dart';
 
 /// gRPC 公共请求头；trace-id 与 ticket 由拦截器每次请求补上
 abstract final class GrpcHeaders {
-  /// 完全照搬 PiliPlus 的评论接口请求头（固定 HD 2.0.1 / 2001100 / master 渠道，
-  /// 不带 x-bili-mid、x-bili-aurora-eid、ticket）。B站对这套身份返回完整楼中楼，
-  /// 不会像对登录态 HD 2.3.1 那样折叠回复。
-  static Map<String, String> piliPlusHeaders(String? accessKey) {
+  /// 评论接口请求头：沿用 PiliPlus 的字段布局（固定 channel/brand/osver、cronet、
+  /// 固定 trace-id、不带 x-bili-mid/aurora-eid），但**自报的客户端身份跟随账号自身**
+  /// （粉版登录就报粉版 android/8.62.0，HD 登录就报 android_hd）。
+  /// 这样 authorization 里的 token 与自报身份一致，服务端才会认作登录并返回 IP 属地；
+  /// 同时因为不带 x-bili-mid，楼中楼不会被折叠。
+  static Map<String, String> piliPlusHeaders(BiliApp app, String? accessKey) {
     final buvid = BiliDevice.buvid;
     return {
       'grpc-encoding': 'gzip',
       'gzip-accept-encoding': 'gzip,identity',
-      'user-agent':
-          'Mozilla/5.0 BiliDroid/2.0.1 (bbcallen@gmail.com) os/android '
-          'model/android_hd mobi_app/android_hd build/2001100 channel/master '
-          'innerVer/2001100 osVer/15 network/2',
+      'user-agent': app.grpcUserAgent,
       'x-bili-gaia-vtoken': '',
       'x-bili-aurora-zone': '',
       'x-bili-trace-id': '11111111111111111111111111111111:1111111111111111:0:0',
@@ -41,27 +40,27 @@ abstract final class GrpcHeaders {
       if (accessKey != null && accessKey.isNotEmpty)
         'authorization': 'identify_v1 $accessKey',
       'buvid': buvid,
-      'x-bili-fawkes-req-bin': fawkes(BiliApp.hd),
+      'x-bili-fawkes-req-bin': fawkes(app),
       'x-bili-device-bin': base64Encode(
         Device(
-          appId: 5,
-          build: 2001100,
+          appId: app.appId,
+          build: app.build,
           buvid: buvid,
-          mobiApp: 'android_hd',
+          mobiApp: app.mobiApp,
           platform: 'android',
           channel: 'master',
           brand: 'android',
           model: 'android',
           osver: '15',
-          versionName: '2.0.1',
+          versionName: app.version,
         ).writeToBuffer(),
       ),
       'x-bili-metadata-bin': base64Encode(
         Metadata(
           accessKey: accessKey,
-          mobiApp: 'android_hd',
+          mobiApp: app.mobiApp,
           device: 'android',
-          build: 2001100,
+          build: app.build,
           channel: 'master',
           buvid: buvid,
           platform: 'android',

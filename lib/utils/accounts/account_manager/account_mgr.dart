@@ -62,14 +62,26 @@ class AccountManager extends Interceptor {
 
     if (isApp && options.responseType == ResponseType.bytes) {
       if (path.contains(GrpcUrl.reply)) {
-        // 评论接口照搬 PiliPlus 的请求头：B站对登录态 HD 2.3.1 + x-bili-mid 身份
-        // 会折叠楼中楼（root.replies 置空），换成 HD 2.0.1 + master 渠道可拿到完整回复。
-        // 但不叠加 x-bili-mid/aurora-eid（会触发折叠），只补 ticket/guestid ——
-        // Cookie 登录的账号没有 accessKey，全靠这两个头表明登录态，否则拿不到 IP 属地。
-        options.headers.addAll(GrpcHeaders.piliPlusHeaders(account.accessKey));
-        final dyn = BiliSession.dynamicHeaders;
-        for (final key in const ['x-bili-ticket', 'guestid']) {
-          if (dyn[key] case final value?) options.headers[key] = value;
+        // 评论接口用 PiliPlus 风格的请求头：不带 x-bili-mid/aurora-eid（这两个会让
+        // B站按登录用户折叠楼中楼，root.replies 置空），但自报身份跟随账号自身
+        // （account.app），使 authorization 的 token 与身份一致 —— 否则粉版 token
+        // 自报 HD 会被当成未登录，拿不到 IP 属地。ticket 是 HD 会话凭据，与之不匹配，故不用。
+        options.headers.addAll(
+          GrpcHeaders.piliPlusHeaders(account.app, account.accessKey),
+        );
+        // 备份恢复 / Cookie 登录的账号可能没有 accessKey，此时补上 Cookie 表明登录态，
+        // 否则服务端按未登录处理，IP 属地不会返回。
+        if (account.accessKey == null || account.accessKey!.isEmpty) {
+          final cookieMap = account.cookieJar.domainCookies['bilibili.com'];
+          if (cookieMap != null) {
+            final cookies = [
+              for (final c in cookieMap.values)
+                for (final e in c.values) e.cookie,
+            ];
+            if (cookies.isNotEmpty) {
+              options.headers[HttpHeaders.cookieHeader] = getCookies(cookies);
+            }
+          }
         }
       } else {
         options.headers
