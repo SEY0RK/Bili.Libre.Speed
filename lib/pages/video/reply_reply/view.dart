@@ -21,6 +21,7 @@ import 'package:PiliBro/common/widgets/sliver/sliver_pinned_header.dart';
 import 'package:PiliBro/common/widgets/view_safe_area.dart';
 
 import 'package:PiliBro/grpc/bilibili/main/community/reply/v1.pb.dart'
+import 'package:PiliBro/grpc/reply.dart';
 
     show ReplyInfo;
 
@@ -534,7 +535,7 @@ class _VideoReplyReplyPanelState extends State<VideoReplyReplyPanel>
 
                 return Text(
 
-                  '相关回复共${NumUtils.numFormat(count)}条 [DBG data=$dataLen tree=$treeLen end=${controller.isEnd}]',
+                  '共$count条 [DBG data=$dataLen tree=$treeLen end=${controller.isEnd} raw=${ReplyGrpc.dbgDetailRaw} aft=${ReplyGrpc.dbgDetailAfter} ${ReplyGrpc.dbgFilters}]',
 
                   style: const TextStyle(fontSize: 11),
 
