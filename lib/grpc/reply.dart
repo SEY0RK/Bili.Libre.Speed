@@ -185,8 +185,6 @@ abstract final class ReplyGrpc {
         pagination: offset == null ? null : FeedPagination(offset: offset),
       ),
       DetailListReply.fromBuffer,
-      // 登录态下 B站会对楼中楼做折叠（root.replies 返回空），改用匿名身份请求可拿到完整回复
-      anonymous: true,
     );
     return res
       ..dataOrNull?.root.replies.removeWhere(

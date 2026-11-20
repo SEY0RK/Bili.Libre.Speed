@@ -61,11 +61,15 @@ class AccountManager extends Interceptor {
     final isApp = path.startsWith(HttpString.appBaseUrl);
 
     if (isApp && options.responseType == ResponseType.bytes) {
-      options.headers
-        ..addAll(account.grpcHeaders)
-        ..addAll(BiliSession.dynamicHeaders);
-      if (GrpcHeaders.replyLegacy && path.contains(GrpcUrl.reply)) {
-        options.headers.addAll(account.replyGrpcHeaders);
+      if (path.contains(GrpcUrl.reply)) {
+        // 评论接口完全照搬 PiliPlus 的请求头：B站对登录态 HD 2.3.1 身份会折叠
+        // 楼中楼（root.replies 置空），换成 HD 2.0.1 + master 渠道可拿到完整回复。
+        // 因此这里不再叠加 grpcHeaders（含 x-bili-mid/aurora-eid）与 ticket/guestid。
+        options.headers.addAll(GrpcHeaders.piliPlusHeaders(account.accessKey));
+      } else {
+        options.headers
+          ..addAll(account.grpcHeaders)
+          ..addAll(BiliSession.dynamicHeaders);
       }
       return handler.next(options);
     }
