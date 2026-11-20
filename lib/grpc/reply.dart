@@ -398,7 +398,7 @@ abstract final class ReplyGrpc {
 
     if (dbgHistory.length < 400) {
 
-      dbgHistory += '[off=${offset == null ? "null" : offset} mode=$mode rpid=$rpid root=$root raw=$rawN cnt=$cntN end=$curEnd] ';
+      dbgHistory += '[o=$oid t=$type rp=$rpid r=$root m=$mode off=${offset == null ? "n" : offset} raw=$rawN cnt=$cntN e=$curEnd] ';
 
     }
 
