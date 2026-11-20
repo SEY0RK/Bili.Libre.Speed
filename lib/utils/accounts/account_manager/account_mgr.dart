@@ -62,10 +62,15 @@ class AccountManager extends Interceptor {
 
     if (isApp && options.responseType == ResponseType.bytes) {
       if (path.contains(GrpcUrl.reply)) {
-        // 评论接口完全照搬 PiliPlus 的请求头：B站对登录态 HD 2.3.1 身份会折叠
-        // 楼中楼（root.replies 置空），换成 HD 2.0.1 + master 渠道可拿到完整回复。
-        // 因此这里不再叠加 grpcHeaders（含 x-bili-mid/aurora-eid）与 ticket/guestid。
+        // 评论接口照搬 PiliPlus 的请求头：B站对登录态 HD 2.3.1 + x-bili-mid 身份
+        // 会折叠楼中楼（root.replies 置空），换成 HD 2.0.1 + master 渠道可拿到完整回复。
+        // 但不叠加 x-bili-mid/aurora-eid（会触发折叠），只补 ticket/guestid ——
+        // Cookie 登录的账号没有 accessKey，全靠这两个头表明登录态，否则拿不到 IP 属地。
         options.headers.addAll(GrpcHeaders.piliPlusHeaders(account.accessKey));
+        final dyn = BiliSession.dynamicHeaders;
+        for (final key in const ['x-bili-ticket', 'guestid']) {
+          if (dyn[key] case final value?) options.headers[key] = value;
+        }
       } else {
         options.headers
           ..addAll(account.grpcHeaders)
