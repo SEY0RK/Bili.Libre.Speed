@@ -28,6 +28,8 @@ abstract final class ReplyGrpc {
 
   static String dbgFilters = '';
 
+  static String dbgHistory = '';
+
   static bool antiGoodsReply = Pref.antiGoodsReply;
 
   static var blockAtOnlyReply = Pref.blockAtOnlyReply;
@@ -384,11 +386,19 @@ abstract final class ReplyGrpc {
 
     final dbgData = res.dataOrNull;
 
-    if (dbgData != null) {
+    final rawN = dbgData?.root.replies.length ?? -1;
 
-      dbgDetailRaw = dbgData.root.replies.length;
+    final cntN = dbgData?.root.count.toInt() ?? -1;
 
-      dbgFilters = 'blk=${blockReplyAtCount} atOnly=${blockAtOnlyReply} goods=${antiGoodsReply} filter=${enableFilter} re=${replyRegExp.pattern} black=${GlobalData().blackMids.length}';
+    final curEnd = res.dataOrNull?.cursor.isEnd ?? null;
+
+    dbgDetailRaw = rawN;
+
+    dbgFilters = 'blk=${blockReplyAtCount} atOnly=${blockAtOnlyReply} goods=${antiGoodsReply} filter=${enableFilter} re=${replyRegExp.pattern} black=${GlobalData().blackMids.length}';
+
+    if (dbgHistory.length < 400) {
+
+      dbgHistory += '[off=${offset == null ? "null" : offset} mode=$mode rpid=$rpid root=$root raw=$rawN cnt=$cntN end=$curEnd] ';
 
     }
 

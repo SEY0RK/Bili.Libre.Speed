@@ -536,7 +536,7 @@ class _VideoReplyReplyPanelState extends State<VideoReplyReplyPanel>
 
                 return Text(
 
-                  '共$count条 [DBG data=$dataLen tree=$treeLen end=${controller.isEnd} raw=${ReplyGrpc.dbgDetailRaw} aft=${ReplyGrpc.dbgDetailAfter} ${ReplyGrpc.dbgFilters}]',
+                  '共$count条 [DBG data=$dataLen tree=$treeLen end=${controller.isEnd} ${ReplyGrpc.dbgFilters}]\n${ReplyGrpc.dbgHistory}',
 
                   style: const TextStyle(fontSize: 11),
 
