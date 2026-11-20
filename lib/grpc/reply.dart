@@ -1,584 +1,278 @@
 import 'package:PiliBro/common/constants.dart';
-
 import 'package:PiliBro/grpc/bilibili/main/community/reply/v1.pb.dart';
-
 import 'package:PiliBro/grpc/bilibili/pagination.pb.dart';
-
 import 'package:PiliBro/grpc/grpc_req.dart';
-
 import 'package:PiliBro/grpc/url.dart';
-
 import 'package:PiliBro/http/loading_state.dart';
-
 import 'package:PiliBro/utils/global_data.dart';
-
 import 'package:PiliBro/utils/storage_pref.dart';
-
 import 'package:fixnum/fixnum.dart';
 
-
-
 abstract final class ReplyGrpc {
-
-  // DEBUG: 记录 detailList 过滤前后条数与开关
-
-  static int dbgDetailRaw = -1;
-
-  static int dbgDetailAfter = -1;
-
-  static String dbgFilters = '';
-
-  static String dbgHistory = '';
-
   static bool antiGoodsReply = Pref.antiGoodsReply;
-
   static var blockAtOnlyReply = Pref.blockAtOnlyReply;
-
   static var blockReplyAtCount = Pref.blockReplyAtCount;
-
   static RegExp replyRegExp = RegExp(
-
     Pref.banWordForReply,
-
     caseSensitive: false,
-
   );
-
   static bool enableFilter = replyRegExp.pattern.isNotEmpty;
 
-
-
   // static Future replyInfo({required int rpid}) {
-
   //   return _request(
-
   //     GrpcUrl.replyInfo,
-
   //     ReplyInfoReq(rpid: Int64(rpid)),
-
   //     ReplyInfoReply.fromBuffer,
-
   //     onSuccess: (response) => response.reply,
-
   //   );
-
   // }
 
-
-
   static bool _hasGoods(Url url) =>
-
       url.hasExtra() &&
-
       (url.extra.goodsCmControl == Int64.ONE ||
-
           url.extra.hasGoodsItemId() ||
-
           url.extra.hasGoodsPrefetchedCache());
 
-
-
   // ref BiliRoamingX
-
   @pragma('vm:prefer-inline')
-
   static bool _needRemoveGoodGrpc(ReplyInfo reply) {
-
     final content = reply.content;
-
     return content.message.contains(Constants.goodsUrlPrefix) ||
-
         (content.urls.isNotEmpty && content.urls.values.any(_hasGoods));
-
   }
 
-
-
   static bool _blockAtOnlyReply(ReplyInfo reply) {
-
     if (!blockAtOnlyReply) return false;
 
-
-
     final content = reply.content;
-
     final atNameToMid = content.atNameToMid;
-
     if (atNameToMid.isEmpty) return false;
-
     if (content.emotes.isNotEmpty || content.pictures.isNotEmpty) return false;
 
-
-
     final message = content.message;
-
     final length = message.length;
-
-
 
     int i = 0;
 
-
-
     if (reply.root != reply.parent) {
-
       i = message.indexOf(':') + 1;
-
       if (i <= 0) return false;
-
     }
 
-
-
     var hasAt = false;
-
     while (i < length) {
-
       var c = message.codeUnitAt(i);
 
-
-
       if (c case 0x20 /* ` ` */ || 0x0A /* `\n` */ ) {
-
         i++;
-
         continue;
-
       }
-
-
 
       if (c != 0x40 /* `@` */ ) return false;
 
-
-
       i++;
-
       final nameStart = i;
 
-
-
       while (i < length) {
-
         c = message.codeUnitAt(i);
-
         if (c case 0x20 || 0x40 || 0x0A) {
-
           break;
-
         }
-
         i++;
-
       }
-
-
 
       if (i == nameStart) return false;
-
       final name = message.substring(nameStart, i);
-
       if (!atNameToMid.containsKey(name)) return false;
 
-
-
       hasAt = true;
-
     }
-
-
 
     return hasAt;
-
   }
-
-
 
   static bool _blockReplyAtCount(ReplyInfo reply) {
-
     return blockReplyAtCount != null &&
-
         reply.content.atNameToMid.length >= blockReplyAtCount!;
-
   }
-
-
 
   static bool needRemoveGrpc(ReplyInfo reply) {
-
     return GlobalData().blackMids.contains(reply.mid.toInt()) ||
-
         _blockReplyAtCount(reply) ||
-
         _blockAtOnlyReply(reply) ||
-
         (antiGoodsReply && _needRemoveGoodGrpc(reply)) ||
-
         (enableFilter && replyRegExp.hasMatch(reply.content.message));
-
   }
-
-
 
   static Future<LoadingState<MainListReply>> mainList({
-
     required int type,
-
     required int oid,
-
     Int64? rpid,
-
     required Mode mode,
-
     required String? offset,
-
     Int64? cursorNext,
-
   }) async {
-
     final res = await GrpcReq.request(
-
       GrpcUrl.mainList,
-
       MainListReq(
-
         oid: Int64(oid),
-
         type: Int64(type),
-
         rpid: rpid,
-
         // cursor: CursorReq(
-
         //   mode: mode,
-
         //   next: cursorNext,
-
         // ),
-
         mode: mode,
-
         pagination: offset == null ? null : FeedPagination(offset: offset),
-
       ),
-
       MainListReply.fromBuffer,
-
     );
-
     if (res case Success(:final response)) {
-
       // keyword filter
-
       if (response.hasUpTop()) {
-
         final topReply = response.upTop;
-
         if (needRemoveGrpc(topReply)) {
-
           response.clearUpTop();
-
         } else {
-
           topReply.replies.removeWhere(needRemoveGrpc);
-
         }
-
       }
-
-
 
       if (response.replies.isNotEmpty) {
-
         response.replies.removeWhere((item) {
-
           final hasMatch = needRemoveGrpc(item);
-
           if (!hasMatch && item.replies.isNotEmpty) {
-
             item.replies.removeWhere(needRemoveGrpc);
-
           }
-
           return hasMatch;
-
         });
-
       }
-
-
 
       if (response.replies.isEmpty && !response.hasUpTop()) {
-
         final offset = response.paginationReply.nextOffset;
-
         if (offset.isNotEmpty && !response.cursor.isEnd) {
-
           return mainList(
-
             type: type,
-
             oid: oid,
-
             rpid: rpid,
-
             mode: mode,
-
             offset: offset,
-
           );
-
         }
-
       }
-
     }
-
     return res;
-
   }
-
-
 
   static Future<LoadingState<DetailListReply>> detailList({
-
     required int type,
-
     required int oid,
-
     required int root,
-
     required int rpid,
-
     required Mode mode,
-
     required String? offset,
-
     Map<Int64, ReplyInfo>? removed,
-
   }) async {
-
     final res = await GrpcReq.request(
-
       GrpcUrl.detailList,
-
       DetailListReq(
-
         oid: Int64(oid),
-
         type: Int64(type),
-
         root: Int64(root),
-
         rpid: Int64(rpid),
-
         scene: DetailListScene.REPLY,
-
         mode: mode,
-
         pagination: offset == null ? null : FeedPagination(offset: offset),
-
       ),
-
       DetailListReply.fromBuffer,
-
+      // 登录态下 B站会对楼中楼做折叠（root.replies 返回空），改用匿名身份请求可拿到完整回复
+      anonymous: true,
     );
-
-    final dbgData = res.dataOrNull;
-
-    final rawN = dbgData?.root.replies.length ?? -1;
-
-    final cntN = dbgData?.root.count.toInt() ?? -1;
-
-    final curEnd = res.dataOrNull?.cursor.isEnd ?? null;
-
-    dbgDetailRaw = rawN;
-
-    dbgFilters = 'blk=${blockReplyAtCount} atOnly=${blockAtOnlyReply} goods=${antiGoodsReply} filter=${enableFilter} re=${replyRegExp.pattern} black=${GlobalData().blackMids.length}';
-
-    if (dbgHistory.length < 400) {
-
-      dbgHistory += '[o=$oid t=$type rp=$rpid r=$root m=$mode off=${offset == null ? "n" : offset} raw=$rawN cnt=$cntN e=$curEnd] ';
-
-    }
-
-    final res2 = res
-
+    return res
       ..dataOrNull?.root.replies.removeWhere(
-
         removed == null
-
             ? needRemoveGrpc
-
             : (i) {
-
                 final flag = needRemoveGrpc(i);
-
                 if (flag) removed[i.id] = i;
-
                 return flag;
-
               },
-
       );
-
-    dbgDetailAfter = res2.dataOrNull?.root.replies.length ?? -1;
-
-    return res2;
-
   }
-
-
 
   static Future<LoadingState<FoldListResp>> foldList({
-
     required int type,
-
     required int oid,
-
     required FeedPagination pagination,
-
   }) async {
-
     final res = await GrpcReq.request(
-
       GrpcUrl.foldList,
-
       FoldListReq(
-
         oid: Int64(oid),
-
         type: Int64(type),
-
         pagination: pagination,
-
       ),
-
       FoldListResp.fromBuffer,
-
     );
-
     return res..dataOrNull?.replies.removeWhere(needRemoveGrpc);
-
   }
-
-
 
   static Future<LoadingState<DialogListReply>> dialogList({
-
     required int type,
-
     required int oid,
-
     required int root,
-
     required int dialog,
-
     required String? offset,
-
   }) async {
-
     final res = await GrpcReq.request(
-
       GrpcUrl.dialogList,
-
       DialogListReq(
-
         oid: Int64(oid),
-
         type: Int64(type),
-
         root: Int64(root),
-
         dialog: Int64(dialog),
-
         pagination: offset == null ? null : FeedPagination(offset: offset),
-
       ),
-
       DialogListReply.fromBuffer,
-
     );
-
     return res..dataOrNull?.replies.removeWhere(needRemoveGrpc);
-
   }
-
-
 
   static Future<LoadingState<SearchItemReply>> searchItem({
-
     required int page,
-
     required SearchItemType itemType,
-
     required int oid,
-
     required int type,
-
     String? keyword,
-
   }) {
-
     return GrpcReq.request(
-
       GrpcUrl.searchItem,
-
       SearchItemReq(
-
         cursor: SearchItemCursorReq(
-
           next: Int64(page),
-
           itemType: itemType,
-
         ),
-
         oid: Int64(oid),
-
         type: Int64(type),
-
         keyword: keyword,
-
       ),
-
       SearchItemReply.fromBuffer,
-
     );
-
   }
-
-
 
   static Future<LoadingState<TranslateReplyResp>> translateReply({
-
     required Int64 type,
-
     required Int64 oid,
-
     required Int64 rpid,
-
   }) {
-
     return GrpcReq.request(
-
       GrpcUrl.translateReply,
-
       TranslateReplyReq(
-
         type: type,
-
         oid: oid,
-
         rpids: [rpid],
-
       ),
-
       TranslateReplyResp.fromBuffer,
-
     );
-
   }
-
 }
-
