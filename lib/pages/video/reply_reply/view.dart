@@ -21,9 +21,10 @@ import 'package:PiliBro/common/widgets/sliver/sliver_pinned_header.dart';
 import 'package:PiliBro/common/widgets/view_safe_area.dart';
 
 import 'package:PiliBro/grpc/bilibili/main/community/reply/v1.pb.dart'
-import 'package:PiliBro/grpc/reply.dart';
 
     show ReplyInfo;
+
+import 'package:PiliBro/grpc/reply.dart';
 
 import 'package:PiliBro/http/loading_state.dart';
 
